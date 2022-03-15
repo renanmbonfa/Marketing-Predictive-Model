@@ -11,7 +11,7 @@ Developed a machine learning model that helped the company to decide  whether to
 
 Constructed a neural network model that improved the sensitivity by 21%
 
-a
+
 
 # Exploratory data analysis
 ```{r}
