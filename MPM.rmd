@@ -391,9 +391,18 @@ imp_nnet
 plot(imp_nnet)
 ```
 
-In an attempt to solve the problem, the techniques of Logistic Regression, Bagging, Boosting, Random Forest, SVM-Linear, SVM-Radial and Neural Networks were applied (the Genetic Algorithm was not implemented due to processing problems). All models showed satisfactory results in terms of accuracy (> 90%) and specificity (> 94%). Thus, sensitivity was chosen as the performance analysis metric of the model. In order to avoid false positives, this metric is the most appropriate, as it provides more security for the determination of targeted advertising. Therefore, the Neural Networks model was chosen. The metrics for this model were, namely, Accuracy of 90.81%, Specificity, 94.49% and Sensitivity, 61.85%.
+In an attempt to solve the problem, the techniques of Logistic Regression, 
+Bagging, Boosting, Random Forest, SVM-Linear, SVM-Radial and Neural Networks
+were applied (the Genetic Algorithm was not implemented due to processing problems). 
+All models showed satisfactory results in terms of accuracy (> 90%) and specificity (> 94%). 
+Thus, sensitivity was chosen as the performance analysis metric of the model. In order to avoid false positives, 
+this metric is the most appropriate, as it provides more security for the determination of targeted advertising. 
+Therefore, the Neural Networks model was chosen. The metrics for this model were, namely, Accuracy of 90.81%, 
+Specificity, 94.49% and Sensitivity, 61.85%.
 
-As a future study, a balancing of the database can be applied. Note that there is little presence of positive cases (only 11% of the base is described as "yes"), which can end up biasing the models.
+As a future study, a balancing of the database can be applied. Note that there is 
+little presence of positive cases (only 11% of the base is described as "yes"), 
+which can end up biasing the models.
 
 
 
