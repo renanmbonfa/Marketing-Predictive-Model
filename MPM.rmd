@@ -1,0 +1,397 @@
+---
+title: "MPM.rmd"
+author: "Renan Bonfá"
+date: "15/03/2022"
+output: html_document
+---
+
+Marketing predictive model developed for Waldata              
+ 
+Developed a machine learning model that helped the company to decide wether to invest in a "Targeted Advertising" solution that predicts whether a costumer will subscribe to the premium service 
+
+Constructed a neural network model that improved the sensitivity by 21%
+
+
+# Exploratory data analysis
+```{r}
+
+library(utils)
+# Setting the environment     
+
+setwd("C:\\Users\\renan\\Downloads\\")
+
+# Importing the dataset
+df <- read.csv("Marketing.csv", sep = ";", dec = "_") 
+```
+
+```{r}
+# Carregando as bibliotecas
+library(dplyr)
+library(ggplot2)
+library(caret)
+library(datasets)
+library(mlbench)
+library(GA)
+library(doParallel)
+```
+
+###Converting numeric variables to factors
+```{r}
+# Converting the variables 
+df$JOB <- as.factor(df$JOB)
+df$MARITAL_STATUS <- as.factor(df$MARITAL_STATUS)
+df$EDUCATION <- as.factor(df$EDUCATION)
+df$DEFAULT <- as.factor(df$DEFAULT)
+df$HOUSING <- as.factor(df$HOUSING)
+df$LOAN <- as.factor(df$LOAN)
+df$CONTACT <- as.factor(df$CONTACT)
+df$MONTH <- as.factor(df$MONTH)# it was chosen to make it a factor, as there is no temporal information
+df$DAY_OF_WEEK <- as.factor(df$DAY_OF_WEEK)
+df$CAMPAIGN <- as.factor(df$CAMPAIGN)
+df$POUTCOME <- as.factor(df$POUTCOME)
+# For the CONS_PRICE_IDX variable, a small adjustment is needed in the values of "93_2", since they are separated by "_"
+df$CONS_PRICE_IDX[df$CONS_PRICE_IDX == "93_2"] <- "93.2"
+df$CONS_PRICE_IDX <- as.numeric(df$CONS_PRICE_IDX)
+df$SUBSCRIBED <- as.factor(df$SUBSCRIBED)
+
+```
+
+### Analyzing NAs
+```{r}
+# Checking for NAs in the dataset
+colSums(is.na(df))
+
+# There is no presence of NAs
+
+# Perform the dataset summary
+
+summary(df)
+
+# The dataset is out of balance. Only 11% of the dataset is subscription.
+```
+
+### Graphic checks, proportions and histograms
+```{r}
+# Checking the variables in relation to the objective variable graphically and in proportion tables.
+# The histograms are also checked, when the variables are quantitative.
+
+# Age
+ggplot(data = df, aes(x = AGE, y =  SUBSCRIBED)) + geom_point()
+hist(df$AGE)
+
+## it doesn't seem to be a good predictor as there is no clear separation between age
+
+# Job
+table(df$JOB, df$SUBSCRIBED)
+prop.table(table(df$JOB, df$SUBSCRIBED),2)
+
+## It seems that being a student increases the chance of applying.
+
+# Marital Status
+table(df$MARITAL_STATUS, df$SUBSCRIBED)
+prop.table(table(df$MARITAL_STATUS, df$SUBSCRIBED),2)
+
+## Doesn't seem to be a good predictor
+
+# Education
+table(df$EDUCATION, df$SUBSCRIBED)
+prop.table(table(df$EDUCATION, df$SUBSCRIBED),2)
+
+## Doesn't seem to be a good predictor
+
+# Default
+table(df$DEFAULT, df$SUBSCRIBED)
+prop.table(table(df$DEFAULT, df$SUBSCRIBED),2)
+
+## If subscribed, then "no"
+
+# Housing
+table(df$HOUSING, df$SUBSCRIBED)
+prop.table(table(df$HOUSING, df$SUBSCRIBED),2)
+
+# Loan
+table(df$LOAN, df$SUBSCRIBED)
+prop.table(table(df$LOAN, df$SUBSCRIBED),2)
+
+# Contact
+table(df$CONTACT, df$SUBSCRIBED)
+prop.table(table(df$CONTACT, df$SUBSCRIBED),2)
+
+## If subscribed, then "mobile"
+
+# Month
+table(df$MONTH, df$SUBSCRIBED)
+prop.table(table(df$MONTH, df$SUBSCRIBED),2)
+## If may, then "no"
+## If apr, then "yes"
+
+# Day of week
+table(df$DAY_OF_WEEK, df$SUBSCRIBED)
+prop.table(table(df$DAY_OF_WEEK, df$SUBSCRIBED),2)
+
+# Duration
+ggplot(data = df, aes(x = DURATION, y =  SUBSCRIBED)) + geom_point()
+hist(df$DURATION)
+hist(log(df$DURATION))
+
+# It may be appropriate to apply the log
+
+# Campaign
+table(df$CAMPAIGN, df$SUBSCRIBED)
+prop.table(table(df$CAMPAIGN, df$SUBSCRIBED),2)
+
+# There are some campaigns that did not work
+
+# PDAYS
+ggplot(data = df, aes(x = PDAYS, y =  SUBSCRIBED)) + geom_point()
+hist(df$PDAYS)
+hist(log(df$PDAYS))
+# Interesting... Longer days since the last contact generated registrations
+# There are enough -1
+
+# previous
+ggplot(data = df, aes(x = PREVIOUS, y = SUBSCRIBED)) + geom_point()
+hist(df$PREVIOUS)
+# There are enough 0
+
+#POUTCOME
+table(df$POUTCOME, df$SUBSCRIBED)
+prop.table(table(df$POUTCOME, df$SUBSCRIBED),2)
+## Seems to be a good predictor
+
+# EMP_VAR_RATE
+ggplot(data = df, aes(x = EMP_VAR_RATE, y = SUBSCRIBED)) + geom_point()
+hist(df$EMP_VAR_RATE)
+
+# CONS_PRICE_IDX
+ggplot(data = df, aes(x = CONS_PRICE_IDX, y = SUBSCRIBED)) + geom_point()
+hist(df$CONS_PRICE_IDX)
+
+# CONS_CONF_IDX
+ggplot(data = df, aes(x = CONS_PRICE_IDX, y = SUBSCRIBED)) + geom_point()
+hist(df$CONS_CONF_IDX)
+```
+
+# Modeling
+```{r}
+# Modeling
+set.seed(314)
+trainIndex <- createDataPartition(df$SUBSCRIBED, p=0.7, list = FALSE)
+
+dfTrain <- df[ trainIndex,]
+dfTest  <- df[-trainIndex,]
+```
+
+### Logistic Regression
+```{r}
+# Logistic Regression
+set.seed(314)
+cv <- trainControl(method = "repeatedcv", number = 5, savePredictions = TRUE,
+                   summaryFunction=twoClassSummary, classProbs = TRUE)
+
+set.seed(314)
+model_logreg <- train(SUBSCRIBED~., data = dfTrain, method = "glm", 
+               metric="ROC",trControl = cv, control = list(maxit = 50))
+model_logreg
+summary(model_logreg)
+
+dfPred_logreg <- predict(model_logreg, newdata=dfTest)
+confusionMatrix(data=dfPred_logreg, dfTest$SUBSCRIBED, positive = "yes")
+```
+
+#### Scoring - Logistic Regression
+```{r}
+dfTest$Pred_RegLog <- dfPred_logreg
+head(dfTest)
+```
+
+#### Importance - Logistic Regression
+```{r}
+imp_logreg <- varImp(model_logreg, useModel=FALSE, scale=FALSE)
+imp_logreg
+plot(imp_logreg)
+```
+
+## Decision trees
+
+### Bagging
+```{r}
+## Bagging
+set.seed(314)
+cv <- trainControl(method = "repeatedcv", number = 5, savePredictions = TRUE, classProbs=TRUE)
+
+set.seed(314)
+model_bagging <- train(SUBSCRIBED~. , data = dfTrain, method = "treebag",trControl = cv)
+model_bagging
+
+dfPred_bagging <- predict(model_bagging ,newdata=dfTest)
+confusionMatrix(data=dfPred_bagging, dfTest$SUBSCRIBED, positive = "yes")
+```
+
+#### Scoring - Bagging
+```{r}
+dfTest$Pred_bagging <- dfPred_bagging
+head(dfTest)
+```
+
+#### Importance - Bagging
+```{r}
+imp_bagging <- varImp(model_bagging, useModel=FALSE, scale=FALSE)
+imp_bagging
+plot(imp_bagging)
+```
+
+### Boosting
+```{r}
+## Boosting
+set.seed(314)
+cv <- trainControl(method = "repeatedcv", number = 5, savePredictions = TRUE, classProbs=TRUE)
+
+set.seed(314)
+model_boosting <- train(SUBSCRIBED~. , data = dfTrain, method = "xgbTree",trControl = cv)
+model_boosting
+model_boosting$modelType
+
+dfPred_boosting <- predict(model_boosting, newdata=dfTest)
+confusionMatrix(data=dfPred_boosting, dfTest$SUBSCRIBED, positive = "yes")
+```
+
+#### Scoring - Boosting
+```{r}
+dfTest$Pred_boosting <- dfPred_boosting
+head(dfTest)
+```
+
+#### Importance - Boosting
+```{r}
+imp_boosting <- varImp(model_boosting, useModel=FALSE, scale=FALSE)
+imp_boosting
+plot(imp_boosting)
+```
+
+### Random Forest
+```{r}
+## Random Forest
+set.seed(314)
+cv <- trainControl(method = "repeatedcv", number = 5, savePredictions = TRUE, classProbs=TRUE)
+
+set.seed(314)
+model_rf <- train(SUBSCRIBED~. , data = dfTrain, method = "rf",trControl = cv)
+model_rf
+model_rf$modelType
+
+dfPred_rf <- predict(model_rf ,newdata=dfTest)
+confusionMatrix(data=dfPred_rf, dfTest$SUBSCRIBED, positive = "yes")
+```
+
+#### Scoring - Random Forest
+```{r}
+dfTest$Pred_rf <- dfPred_rf
+head(dfTest)
+```
+
+#### Importance - Random Forest
+```{r}
+imp_rf <- varImp(model_rf, useModel=FALSE, scale=FALSE)
+imp_rf
+plot(imp_rf)
+```
+
+##SVM
+
+### SVM Linear
+```{r}
+##Linear
+set.seed(314)
+cv <- trainControl(method = "repeatedcv", number = 5, savePredictions = TRUE)
+
+set.seed(314)
+model_linear <- train(SUBSCRIBED~., data = dfTrain, method = "svmLinear", trControl = cv, 
+                      preProcess = c("center", "scale"))
+
+model_linear
+model_linear$modelType
+
+dfPred_linear <- predict(model_linear, newdata=dfTest)
+confusionMatrix(data=dfPred_linear, dfTest$SUBSCRIBED, positive = "yes")
+```
+
+#### Scoring - SVM Linear
+```{r}
+dfTest$Pred_linear <- dfPred_linear
+head(dfTest)
+```
+
+#### Importance - SVM Linear
+```{r}
+imp_SVM_Linear <- varImp(model_linear, useModel=FALSE, scale=FALSE)
+imp_SVM_Linear
+plot(imp_SVM_Linear)
+```
+
+### SVM Radial
+```{r}
+set.seed(314)
+cv <- trainControl(method = "repeatedcv", number = 5, savePredictions = TRUE)
+
+set.seed(314)
+model_radial <- train(SUBSCRIBED~., data = dfTrain, method = "svmRadial", trControl = cv, 
+                   preProcess = c("center", "scale"))
+model_radial
+model_radial$modelType
+
+dfPred_radial <- predict(model_radial, newdata=dfTest)
+confusionMatrix(data=dfPred_radial, dfTest$SUBSCRIBED, positive = "yes")
+```
+
+#### Scoring - SVM Radial
+```{r}
+dfTest$Pred_radial <- dfPred_radial
+head(dfTest)
+```
+
+#### Importance - SVM Radial
+```{r}
+imp_SVM_Radial <- varImp(model_radial, useModel=FALSE, scale=FALSE)
+imp_SVM_Radial
+plot(imp_SVM_Radial)
+```
+
+### Redes Neurais
+```{r}
+# Neural
+set.seed(314)
+cv <- trainControl(method = "repeatedcv", number = 5, savePredictions = TRUE)
+
+set.seed(314)
+model_neural <- train(SUBSCRIBED~. , data = dfTrain, method = "nnet",
+                      trControl = cv, trace = FALSE,
+                      preProcess = c("center", "scale"))
+
+model_neural
+model_neural$modelType
+
+dfPred_neural <- predict(model_neural, newdata=dfTest)
+confusionMatrix(data=dfPred_neural, dfTest$SUBSCRIBED, positive = "yes")
+```
+
+#### Scoring - Neural Networks
+```{r}
+dfTest$Pred_neural <- dfPred_neural
+head(dfTest)
+```
+
+#### Importance - Neural Networks
+```{r}
+imp_nnet <- varImp(model_neural, useModel=FALSE, scale=FALSE)
+imp_nnet
+plot(imp_nnet)
+```
+
+In an attempt to solve the problem, the techniques of Logistic Regression, Bagging, Boosting, Random Forest, SVM-Linear, SVM-Radial and Neural Networks were applied (the Genetic Algorithm was not implemented due to processing problems). All models showed satisfactory results in terms of accuracy (> 90%) and specificity (> 94%). Thus, sensitivity was chosen as the performance analysis metric of the model. In order to avoid false positives, this metric is the most appropriate, as it provides more security for the determination of targeted advertising. Therefore, the Neural Networks model was chosen. The metrics for this model were, namely, Accuracy of 90.81%, Specificity, 94.49% and Sensitivity, 61.85%.
+
+As a future study, a balancing of the database can be applied. Note that there is little presence of positive cases (only 11% of the base is described as "yes"), which can end up biasing the models.
+
+
+
+
